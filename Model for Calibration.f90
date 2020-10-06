@@ -1,10 +1,5 @@
 
-! compute the welfare gain and cost.....
-! timeline of each period:
-! at the beginning: the ap*qb or ap*qm from the previous period, is given to the firm. This is the liquid wealth.
-! at the beginning: I also have house on my hand. 
-! then I provide labor to the firm, firm produce. at the 'middle' of the period, I get the wage income and the qb
-! finally, I decide to transit my house. I sell my house and buy a new. I also determine ap for the next period.
+! This code is for the Calculation of Benchmark Equilibrium.
 
 include 'parameter.f90'
 

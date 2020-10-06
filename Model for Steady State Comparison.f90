@@ -1,7 +1,7 @@
 
-! compute the welfare gain and cost.....
-! 08/04 notice here the distribution of hous is not good. there is still high density at maxh. 
-! try to reduce this density to below 0.05....
+! In this code I compute two new equilibria. 
+! new equilibrium 1: pension income declines while tax rate fixed
+! new equilibrium 2: pension income fixed while tax rate raises
 
 include 'parameter.f90'
 

@@ -1,6 +1,6 @@
 
-! This code is for the Calculation of Benchmark Equilibrium.
-
+! This code is for the Calculation of Benchmark Equilibrium. 
+!  The main technics are Backward Induction, Grid Search, and Iteration, Interpolation, and sort.
 include 'parameter.f90'
 
 

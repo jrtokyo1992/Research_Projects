@@ -332,48 +332,6 @@ end
 
 
 
-subroutine hypothetical_value
-integer j,b,h,e,il,ir,ep
-real(8) temp,fai,temp2
-v_adjust=small
-do j=agemax,agemin,(-1)
-   do b=1,nb
-      do h=1,nh
-         if (gridb(b)<-lambdab*p1*gridh(h)*(1d0-delta_h)) cycle
-        do e=1,ne
-          if (pu_1(e,h,b,j)<0) cycle
-            if (j<agemax) then
-               call linear(s_1(e,h,b,j), gridb, il, ir, fai)
-               temp=0d0
-              ! print*,'xixixi'
-               if (j.le.retire) then
-                  do ep=1,ne
-                     temp2=v_adjust(ep,pu_1(e,h,b,j),il,j+1)*fai+v_adjust(ep,pu_1(e,h,b,j),ir,j+1)*(1d0-fai)
-                     temp=temp+markov(e,ep)*temp2
-                  end do
-               else
-               temp=v_adjust(e,pu_1(e,h,b,j),il,j+1)*fai+v_adjust(e,pu_1(e,h,b,j),ir,j+1)*(1d0-fai)
-               end if
-               
-               v_adjust(e,h,b,j)=u(c_1(e,h,b,j),gridh(h))+beta*temp*(1d0-death(j+1))
-              ! if(j<agemax) print*,wg(e,h,b,j)
-               v_adjust(e,h,b,j)=v_adjust(e,h,b,j)+beta*bequestutility(s_1(e,h,b,j)&
-               +(1d0-delta_h-kappa_h)*p1*gridh(pu_1(e,h,b,j)))*death(j+1)
-              ! if(j<agemax) print*,wg(e,h,b,j)
-              
-            else
-               
-               v_adjust(e,h,b,j)=u(c_1(e,h,b,j),gridh(h))&
-               +beta*bequestutility(s_1(e,h,b,j)+(1d0-delta_h-kappa_h)*p1*gridh(pu_1(e,h,b,j)))*death(j+1)
-               end if 
-             !  print*, e,h,b,j,v_adjust(e,h,b,j)
-        end do 
-        end do
-        end do
-end do
-end 
-
-
 subroutine welfare_gain_cal
 integer e,h,b,j
 welfare_gain=0d0

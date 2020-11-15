@@ -1,12 +1,9 @@
 
-! This code compute the initial equilibrium, and compare model moment with the data moment. 
-! We first guess the aggregate variables and prices
-! Based on prices, we first compute the policy function for household by backward inducation
-! We use grid search when solving optimization problem. time consuming, but robust. 
-! With the policy function, we simulate the whole model economy and get aggregate varaibles.
-! The equilibrium, a fixed point, is reached, if new aggregate variables are close enough to our initial guess.
-! otherwise, we need to update our guess and reiterate. 
-
+! This code compute the new equilibrirum under new demographic paramters.
+! consider the following government policy response
+! policy =1 : adjust pension replacement ratio
+! policy =2 : adjust labor income tax rate
+! policy =3: adjust firm revenue tax rate.
 ! first, incorporate all the parameters and variables.
 include 'parameter.f90'
 

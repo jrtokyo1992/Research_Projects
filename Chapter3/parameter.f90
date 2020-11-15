@@ -1,27 +1,15 @@
 module global
 integer i
-
 integer,parameter:: nb=53,nh=21,nbp=40 ! original nb is 58
-
 real(8) gridh(nh)
-real(8),parameter::lambdab=0.6d0,tau_h=0.05d0,kappa_h=0.035d0,premium=0.03d0
-! the h_supply is calculated from berueu of statistics, china. the original value is 1.8.
-real(8),parameter:: lambdab_old=0.7d0,rb=0.0325d0,rm=0.05d0,beta=0.975d0
-real(8),parameter:: delta_h=0.0375d0,g=0d0,h_constant=75d0,delta=0.1d0,alpha=0.9d0
-real(8),parameter:: phi=0.8d0 ,psi=8d0,gama=0.8d0,bconstant=120d0,sigma=2d0,land=0.15d0,eta=0.5d0
-!real(8),parameter:: bconstant=2.85d0 i used to set 2.85
-! the annual rent/ price in china is about 3%
-
-! kf can mean contract tax
-integer, parameter ::agemin=21,agemax=90,retire=60
-
+real(8),parameter::lambdab=0.6d0,tau_h=0.05d0,kappa_b=0.02d0,premium=0.03d0,lambdab_old = 0d0, kappa_s = 0.2d0
+real(8),parameter:: delta_h=0.0375d0,g=0.058d0,h_constant=2.1d0,delta=0.1d0,alpha=0.35d0
+real(8),parameter:: phi=0.32d0,sigma=2d0,land=20d0,eta=0.5d0
+integer,parameter ::agemin=21,agemax=90,retire=60
 integer,parameter:: ne=5
-real(8),parameter::rho=0.95d0,sig=sqrt(0.03d0)  ! orginal taken from ...
-!real(8),parameter::rho=0.9d0,sig=sqrt(0.07d0) ! makes the wealth distribution match the data better...
-
-real(8),parameter:: small=-1000000000d0
+real(8),parameter:: rho=0.84d0,sig=sqrt(0.055d0)  
+real(8),parameter:: small=-1000000000d0, growth = 0.08d0
 integer,parameter:: small_int=-100000000
-
 real(8), parameter::period(21:60)=(/1d0&
 ,1.037625364d0&
 ,1.074072191d0&
@@ -66,34 +54,31 @@ real(8), parameter::period(21:60)=(/1d0&
 
 real(8) gride(ne),markov(ne,ne),gridb(nb),output
   ! these may change!!!!!!!!!!
-real(8) bfmin,bfmax,bmax,bmin,p,d,replace,qb,w,m_y(agemin:agemax,ne)
+real(8) bmax,bmin,p,d,replace,qb,w,m_y(agemin:agemax,ne)
 
-real(8) ownership,wealth_gini,networthratio,r,base
+real(8) ownership,networthratio,r,base
 
 real(8) v_initial(ne,nh,nb,agemin:agemax),v_new(ne,nh,nb,agemin:agemax),v_old(ne,nh,nb,agemin:agemax)
 real(8) welfare_gain(ne,nh,nb,agemin:agemax),c_old(ne,nh,nb,agemin:agemax),s_old(ne,nh,nb,agemin:agemax)
-
-real(8) h_supply, construction_lasttime,wealth_lasttime,qm
-
+real(8) qm, gama1,replace1, tau_ss1
 integer pu_old(ne,nh,nb,agemin:agemax)
-
 real(8) sell_a,hold_a, renthouse_a, purchase_a,bequest_a,initialwealth,a_a,initialwealth_new,construction,construction_new
-
 real(8) h2140(nh),h6190(nh),h4160(nh)
 
-real(8) maxhouse(agemin:agemax)
+real(8) maxhouse(agemin:agemax),scaling
 real(8) survival(agemin:agemax+1), death(agemin:agemax+1)
+
 !define all the policy matrixs
 
 real(8) life_measure(agemin:agemax),life_income1(14),life_measure_old(agemin:agemax)
 real(8) life_income(agemin:agemax),life_income2(14),life_income3(14)
-
 real(8) v(ne,nh,nb,agemin:agemax),maxincome
 real(8) c(ne,nh,nb,agemin:agemax),s(ne,nh,nb,agemin:agemax),age5(14),life_cons5(14)
 real(8) life_house5(14),life_asset5(14),life_ownership5(14)
 integer pu(ne,nh,nb,agemin:agemax)
 real(8) v_adjust(ne,nh,nb,agemin:agemax)
 real(8) popgrowth,back(agemin:agemax)
+real(8) l_p,g_e,house_trans_revenue,gama
 
 integer,allocatable::house(:,:),income(:, :)
 real(8),allocatable::a(:,:),cons(:,:),hold(:,:),purchase(:,:)
@@ -101,54 +86,37 @@ real(8),allocatable::a(:,:),cons(:,:),hold(:,:),purchase(:,:)
 integer zeropoint
 
 real(8) n_h,networth,consexp,houseexp,totalincome,bound,housebound,n_f,totallabor,totalexp
-real(8) wealth75,wealth50,wealth60,bequestratio,employmentratio,houseexpratio,cons_a
-
+real(8) wealth75,wealth50,wealth60,bequestratio,employmentratio,houseexpratio,cons_a, p_trend
+! define some life cycle series
 real(8) life_cons(agemin:agemax),life_house(agemin:agemax),maxsave(agemin:agemax)
 real(8) life_asset(agemin:agemax),life_ownership(agemin:agemax),m(ne,nh,nb,agemin:agemax)
-real(8) m_initial(ne,nh,nb,agemin:agemax)
-
 real(8) life_cons1(14),life_house1(14)
 real(8) life_asset1(14),life_ownership1(14)
-
 real(8) life_cons2(14),life_house2(14)
 real(8) life_asset2(14),life_ownership2(14)
-
 real(8) life_cons3(14),life_house3(14)
 real(8) life_asset3(14),life_ownership3(14)
 
+real(8) m_initial(ne,nh,nb,agemin:agemax)
 real(8) s_1(ne,nh,nb,agemin:agemax),c_1(ne,nh,nb,agemin:agemax)
 real(8) s_2(ne,nh,nb,agemin:agemax),c_2(ne,nh,nb,agemin:agemax)
 real(8) s_3(ne,nh,nb,agemin:agemax),c_3(ne,nh,nb,agemin:agemax)
 integer pu_1(ne,nh,nb,agemin:agemax),pu_2(ne,nh,nb,agemin:agemax),pu_3(ne,nh,nb,agemin:agemax)
 real(8) m1(ne,nh,nb,agemin:agemax),m2(ne,nh,nb,agemin:agemax),m3(ne,nh,nb,agemin:agemax)
-
-real(8) unconstrained, saver,constrained(agemin:agemax),pension,housetax
-
+real(8) unconstrained, saver,constrained(agemin:agemax),pension,housetax,h_trend
 real(8) v1(ne,nh,nb,agemin:agemax),v2(ne,nh,nb,agemin:agemax),v3(ne,nh,nb,agemin:agemax)
-
 real(8) trans1,trans2,trans3,construction1,construction2,construction3,p1,p2,p3,r1,r2,r3,w1,w2,w3
-
 real(8) pu1,pu2,pu3,kl1,kl2,kl3,totalmeasure1,totalmeasure2,totalmeasure3
-
 real(8) ownership1,ownership2,ownership3
-
 real(8) h2_25(nh),h2_45(nh),h2_65(nh)
 real(8) gridb_old(nb),gridb_new(nb),shouru_old(agemin:agemax,ne),shouru_new(agemin:agemax,ne),labor(agemin:retire,ne)
-
 real(8) bequestpositive,totalmeasure
-
 real(8) klratio_lasttime,klratio_new,klratio,piratio1,piratio2,piratio3
-
 real(8) timestart,timeend1,timeend2,retireincome,timeend,age(agemin:agemax),error
 real(8) bfnext,bpmax,bpmin,resource,temp,temp2,temp3,shouru(agemin:agemax,ne)
 real(8) tau_ss
-real(8), parameter:: growth=0.08d0
-!real(8) gridb_neg(nb*0.6d0)
-
-
 real(8) maxsaving(agemin:agemax)
 integer max_index(agemin:agemax)
-
 real(8) maxhousing(agemin:agemax)
 integer max_index_h(agemin:agemax)
 
@@ -158,9 +126,8 @@ subroutine gridb_gen
 use toolbox
 integer b,j,e
 real(8) gridb_positive(28),gridb_negative(nb-28+1)
-bmax=360d0 ! i dont know whether this is correct or not. from the life cycle plot plot, I find that it is around 20.
-bmin=-85d0 ! the numerical shows that for each period , no one will be less than -65. this is subject to the parameter, ofcourse.
-! how to set the growth of the distance?? need some adjustment?
+bmax = 210d0 ! i dont know whether this is correct or not. from the life cycle plot plot, I find that it is around 20.
+bmin = -20d0 ! the numerical shows that for each period , no one will be less than -65. this is subject to the parameter, ofcourse.
 call grid_Cons_Grow(gridb_positive,0d0,bmax,growth) ! growing distance
 call grid_cons_grow(gridb_negative,0d0,-bmin,growth)
 gridb_negative=-gridb_negative
@@ -340,11 +307,7 @@ subroutine gridh_gen
 use toolbox
 integer h
 gridh(1)=0d0
-call Grid_Cons_Grow(gridh(2:nh),6.85d0,130d0,0.17d0)! the original one is equal distance.
-!call Grid_Cons_Grow(gridh,0d0,140d0,0.15d0)
-! currently, for medium aged people, most can afford the largest house.
-! this is not realistic.
-!print*,'housing grid'
+call Grid_Cons_Grow(gridh(2:nh),3.5d0,50d0,0.15d0)! the original one is equal distance.
 
 open(1, file='gridh.xls', status='replace') 
   do h=1,nh
@@ -512,52 +475,27 @@ end function ispline
 
 function u(c,h)
 real(8) c,h,rent,u
-    !u=(c**(1d0-phi))*((h+h_constant)**phi)
-    u=(1d0-phi)*c**(1d0-gama)+phi*(h+h_constant)**(1d0-gama)
-    u=u**(1d0/(1d0-gama))
-    u=u**(1d0-sigma)-1d0   
-    u=u/(1-sigma)
+    u = (c**(1d0-phi))*((h+h_constant)**phi)
+    u = u**(1d0-sigma)-1d0   
+    u = u/(1-sigma)
     return 
 end
 
-function bequestutility(b)
-real(8) bequestutility,b
-   
-    bequestutility=(b+bconstant)**((1-sigma))-1d0  
-    
-    bequestutility=bequestutility*psi/(1-sigma)
-    return 
-end
+
 
 
 subroutine survival_gen_initial
 integer j
-survival(agemin:40)=1d0
-survival(41)=1d0
-survival(50)=0.992d0
-do j=42,50
-  survival(j)=survival(j-1)+(survival(50)-survival(41))/(10-1)
-end do
-survival(51)=0.9915d0
-survival(60)=0.988d0
-do j=52,60
-  survival(j)=survival(j-1)+(survival(60)-survival(51))/(10-1)
-end do
-survival(61)=0.9879d0
-survival(70)=0.965d0
-do j=62,70
-  survival(j)=survival(j-1)+(survival(70)-survival(61))/(10-1)
-end do
-survival(71)=0.9649d0
-survival(80)=0.925d0
-do j=71,80
-  survival(j)=survival(j-1)+(survival(80)-survival(71))/(10-1)
-end do
-survival(81)=0.924d0
-survival(agemax)=0.82d0
-do j=81,agemax
-  survival(j)=survival(j-1)+(survival(agemax)-survival(81))/(10-1)
-end do
+survival(21:45) = 0.997d0
+survival(46:50) = 0.995d0
+survival(51:55) = 0.985d0
+survival(56:60) = 0.98d0
+survival(61:65) = 0.975d0
+survival(66:70) = 0.97d0
+survival(71:75) = 0.948d0
+survival(76:80) = 0.902d0
+survival(81:85) = 0.87d0
+survival(85:90) = 0.83d0
 survival(agemax+1)=0d0
 death=1d0-survival
 
@@ -571,37 +509,21 @@ end
 
 subroutine survival_gen_new
 integer j
-survival(agemin:40)=1d0
-survival(41)=1d0
-survival(50)=0.9985d0
-do j=42,50
-  survival(j)=survival(j-1)+(survival(50)-survival(41))/(10-1)
-end do
-survival(51)=0.9975d0
-survival(60)=0.995d0
-do j=52,60
-  survival(j)=survival(j-1)+(survival(60)-survival(51))/(10-1)
-end do
-survival(61)=0.9945d0
-survival(70)=0.985d0
-do j=62,70
-  survival(j)=survival(j-1)+(survival(70)-survival(61))/(10-1)
-end do
-survival(71)=0.9845d0
-survival(80)=0.948d0
-do j=71,80
-  survival(j)=survival(j-1)+(survival(80)-survival(71))/(10-1)
-end do
-survival(81)=0.9475d0
-survival(agemax)=0.88d0
-do j=81,agemax
-  survival(j)=survival(j-1)+(survival(agemax)-survival(81))/(10-1)
-end do
-survival(agemax+1)=0d0
+survival(21:45) = 1d0
+survival(46:50) = 0.997d0
+survival(51:55) = 0.997d0
+survival(56:60) = 0.997d0
+survival(61:65) = 0.994d0
+survival(66:70) = 0.992d0
+survival(71:75) = 0.983d0
+survival(76:80) = 0.977d0
+survival(81:85) = 0.93d0
+survival(85:90) = 0.902d0
+survival(agemax+1)= 0d0
 death=1d0-survival
 
 open(1, file='death_new.xls', status='replace')  
-   do j=agemin,agemax+1
+   do j = agemin,agemax+1
       write(1,*) death(j)
     end do
 close(1)

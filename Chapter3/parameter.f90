@@ -1,10 +1,11 @@
 module global
+use toolbox
 integer i
-integer,parameter:: nb=53,nh=21,nbp=40 ! original nb is 58
+integer,parameter:: nb=53,nh=8,nbp=40 ! original nb is 58
 real(8) gridh(nh)
-real(8),parameter::lambdab=0.6d0,tau_h=0.05d0,kappa_b=0.02d0,premium=0.03d0,lambdab_old = 0d0, kappa_s = 0.2d0
-real(8),parameter:: delta_h=0.0375d0,g=0.058d0,h_constant=2.1d0,delta=0.1d0,alpha=0.35d0
-real(8),parameter:: phi=0.32d0,sigma=2d0,land=20d0,eta=0.5d0
+real(8),parameter::lambdab=0.6d0,tau_h=0.05d0,kappa_b=0.05d0,premium=0.03d0,lambdab_old = 0d0, kappa_s = 0.25d0
+real(8),parameter:: delta_h=0.0375d0,g=0.05d0,h_constant=5d0,delta=0.1d0,alpha=0.35d0
+real(8),parameter:: phi=0.33d0,sigma=2d0,land=20d0,eta=0.5d0 , beta_original = 0.96d0, psi = 20d0, b_constant = 40d0
 integer,parameter ::agemin=21,agemax=90,retire=60
 integer,parameter:: ne=5
 real(8),parameter:: rho=0.84d0,sig=sqrt(0.055d0)  
@@ -52,81 +53,68 @@ real(8), parameter::period(21:60)=(/1d0&
 ,1.594093451d0/)
 
 
-real(8) gride(ne),markov(ne,ne),gridb(nb),output
-  ! these may change!!!!!!!!!!
+real(8) gride(ne),markov(ne,ne),gridb(nb),output,beta
+real(8) life_purchase(agemin:agemax),life_sell(agemin:agemax)
 real(8) bmax,bmin,p,d,replace,qb,w,m_y(agemin:agemax,ne)
+real(8) popgrowth_old, survival_old(agemin:agemax+1)
+real(8) re, pop_pre_retire, pop_after_retire,scaling, omega
+real(8) ownership,networthratio,r,base, total_pension
+real(8) be(ne,nh,nb,agemin:agemax), popgrowth
 
-real(8) ownership,networthratio,r,base
-
-real(8) v_initial(ne,nh,nb,agemin:agemax),v_new(ne,nh,nb,agemin:agemax),v_old(ne,nh,nb,agemin:agemax)
-real(8) welfare_gain(ne,nh,nb,agemin:agemax),c_old(ne,nh,nb,agemin:agemax),s_old(ne,nh,nb,agemin:agemax)
-real(8) qm, gama1,replace1, tau_ss1
+real(8) qm
 integer pu_old(ne,nh,nb,agemin:agemax)
-real(8) sell_a,hold_a, renthouse_a, purchase_a,bequest_a,initialwealth,a_a,initialwealth_new,construction,construction_new
-real(8) h2140(nh),h6190(nh),h4160(nh)
+real(8) sell_a,hold_a, renthouse_a, purchase_a,bequest_a,trans,a_a,trans_new,construction,construction_new
 
-real(8) maxhouse(agemin:agemax),scaling
+real(8) maxhouse(agemin:agemax)
 real(8) survival(agemin:agemax+1), death(agemin:agemax+1)
+real(8) death_old(agemin:agemax+1), g_e_ratio
+real(8) survival_new(agemin:agemax+1), death_new(agemin:agemax+1),popgrowth_new
 
 !define all the policy matrixs
 
-real(8) life_measure(agemin:agemax),life_income1(14),life_measure_old(agemin:agemax)
+real(8) life_measure(agemin:agemax),life_income_avg(14),life_measure_old(agemin:agemax)
 real(8) life_income(agemin:agemax),life_income2(14),life_income3(14)
 real(8) v(ne,nh,nb,agemin:agemax),maxincome
 real(8) c(ne,nh,nb,agemin:agemax),s(ne,nh,nb,agemin:agemax),age5(14),life_cons5(14)
 real(8) life_house5(14),life_asset5(14),life_ownership5(14)
 integer pu(ne,nh,nb,agemin:agemax)
-real(8) v_adjust(ne,nh,nb,agemin:agemax)
-real(8) popgrowth,back(agemin:agemax)
+!real(8) back(agemin:agemax)
 real(8) l_p,g_e,house_trans_revenue,gama
-
-integer,allocatable::house(:,:),income(:, :)
-real(8),allocatable::a(:,:),cons(:,:),hold(:,:),purchase(:,:)
 
 integer zeropoint
 
-real(8) n_h,networth,consexp,houseexp,totalincome,bound,housebound,n_f,totallabor,totalexp
-real(8) wealth75,wealth50,wealth60,bequestratio,employmentratio,houseexpratio,cons_a, p_trend
+real(8) n_h,networth,consexp,houseexp,totalincome,bound,housebound,totallabor,totalexp
+real(8) bequestratio,cons_a, p_trend
 ! define some life cycle series
 real(8) life_cons(agemin:agemax),life_house(agemin:agemax),maxsave(agemin:agemax)
 real(8) life_asset(agemin:agemax),life_ownership(agemin:agemax),m(ne,nh,nb,agemin:agemax)
-real(8) life_cons1(14),life_house1(14)
-real(8) life_asset1(14),life_ownership1(14)
-real(8) life_cons2(14),life_house2(14)
-real(8) life_asset2(14),life_ownership2(14)
-real(8) life_cons3(14),life_house3(14)
-real(8) life_asset3(14),life_ownership3(14)
 
-real(8) m_initial(ne,nh,nb,agemin:agemax)
-real(8) s_1(ne,nh,nb,agemin:agemax),c_1(ne,nh,nb,agemin:agemax)
-real(8) s_2(ne,nh,nb,agemin:agemax),c_2(ne,nh,nb,agemin:agemax)
-real(8) s_3(ne,nh,nb,agemin:agemax),c_3(ne,nh,nb,agemin:agemax)
-integer pu_1(ne,nh,nb,agemin:agemax),pu_2(ne,nh,nb,agemin:agemax),pu_3(ne,nh,nb,agemin:agemax)
-real(8) m1(ne,nh,nb,agemin:agemax),m2(ne,nh,nb,agemin:agemax),m3(ne,nh,nb,agemin:agemax)
 real(8) unconstrained, saver,constrained(agemin:agemax),pension,housetax,h_trend
-real(8) v1(ne,nh,nb,agemin:agemax),v2(ne,nh,nb,agemin:agemax),v3(ne,nh,nb,agemin:agemax)
-real(8) trans1,trans2,trans3,construction1,construction2,construction3,p1,p2,p3,r1,r2,r3,w1,w2,w3
-real(8) pu1,pu2,pu3,kl1,kl2,kl3,totalmeasure1,totalmeasure2,totalmeasure3
-real(8) ownership1,ownership2,ownership3
-real(8) h2_25(nh),h2_45(nh),h2_65(nh)
-real(8) gridb_old(nb),gridb_new(nb),shouru_old(agemin:agemax,ne),shouru_new(agemin:agemax,ne),labor(agemin:retire,ne)
+real(8) totalmeasure1,klratio1
+real(8) gridb_old(nb),gridb_new(nb),labor(agemin:retire,ne)
 real(8) bequestpositive,totalmeasure
 real(8) klratio_lasttime,klratio_new,klratio,piratio1,piratio2,piratio3
-real(8) timestart,timeend1,timeend2,retireincome,timeend,age(agemin:agemax),error
-real(8) bfnext,bpmax,bpmin,resource,temp,temp2,temp3,shouru(agemin:agemax,ne)
+real(8) age(agemin:agemax),error
+real(8) bpmax,bpmin,resource,temp,temp2,temp3,shouru(agemin:agemax,ne)
 real(8) tau_ss
 real(8) maxsaving(agemin:agemax)
 integer max_index(agemin:agemax)
 real(8) maxhousing(agemin:agemax)
 integer max_index_h(agemin:agemax)
 
+real(8) life_cost(agemin:agemax),life_resource(agemin:agemax)
+real(8) life_cost1(agemin:agemax)
+real(8) p_init,r_init,w_init,ownership_init,&
+        hold_a_init, construction_init,klratio_init, l_p_init,trans_init, totalmeasure_init,&
+        tau_ss_init, replace_init,omega_init, g_e_ratio_init
 contains
 
+! generate the grid for liquid asset.
 subroutine gridb_gen
 use toolbox
 integer b,j,e
 real(8) gridb_positive(28),gridb_negative(nb-28+1)
-bmax = 210d0 ! i dont know whether this is correct or not. from the life cycle plot plot, I find that it is around 20.
+bmax = 220d0 ! i dont know whether this is correct or not. from the life cycle plot plot, I find that it is around 20.
 bmin = -20d0 ! the numerical shows that for each period , no one will be less than -65. this is subject to the parameter, ofcourse.
 call grid_Cons_Grow(gridb_positive,0d0,bmax,growth) ! growing distance
 call grid_cons_grow(gridb_negative,0d0,-bmin,growth)
@@ -276,38 +264,14 @@ fai=1d0-fai
 
 end
 
-function hdist(agestart,ageend)
-integer h,agestart,ageend,j
-real(8) hdist(nh)
-hdist=0d0
-do j=agestart,ageend
-     do h=1,nh
-     hdist(h)=hdist(h)+sum(m(:,h,:,j))
-     end do
-end do
-
-hdist=hdist/sum(m(:,:,:,agestart:ageend))
-end
-
-function hshare(hdist,percentile)
-real(8) hdist(nh),s,hshare,percentile
-integer i,h
-s=0d0
-hshare=0d0
-do h=1,nh
-s=s+hdist(h)
-if (s .ge. percentile) then
-hshare=gridh(h)
-exit
-end if
-end do
-end 
-
 subroutine gridh_gen
 use toolbox
 integer h
 gridh(1)=0d0
-call Grid_Cons_Grow(gridh(2:nh),3.5d0,50d0,0.15d0)! the original one is equal distance.
+
+!call Grid_Cons_Grow(gridh(2:nh),3.85d0,50d0,0.15d0)! the original one is equal distance.
+
+call Grid_Cons_Grow(gridh(2:nh),4.5d0,55d0,0.05d0)! the original one is equal distance.
 
 open(1, file='gridh.xls', status='replace') 
   do h=1,nh
@@ -317,162 +281,6 @@ close(1)
 end 
 
 
-subroutine array_spline(x_orig, y_orig,n,x_eval,y_eval,n_eval)
-integer n,n_eval,i
-real(8) x_orig(n),y_orig(n),b(n),c(n),d(n)
-real(8) x_eval(n_eval),y_eval(n_eval)
-
-call spline (x_orig, y_orig, b, c, d,n) 
-do i=1, n_eval
- 
-  y_eval (i)= ispline(x_eval(i), x_orig, y_orig, b, c, d, n)
-  
-end do
-end 
-!
- 
-
-subroutine spline (x, y, b, c, d, n)
-!======================================================================
-!  Calculate the coefficients b(i), c(i), and d(i), i=1,2,...,n
-!  for cubic spline interpolation
-!  s(x) = y(i) + b(i)*(x-x(i)) + c(i)*(x-x(i))**2 + d(i)*(x-x(i))**3
-!  for  x(i) <= x <= x(i+1)
-!  Alex G: January 2010
-!----------------------------------------------------------------------
-!  input..
-!  x = the arrays of data abscissas (in strictly increasing order)
-!  y = the arrays of data ordinates
-!  n = size of the arrays xi() and yi() (n>=2)
-!  output..
-!  b, c, d  = arrays of spline coefficients
-!  comments ...
-!  spline.f90 program is based on fortran version of program spline.f
-!  the accompanying function fspline can be used for interpolation
-!======================================================================
-implicit none
-integer n
-double precision x(n), y(n), b(n), c(n), d(n)
-integer i, j, gap
-double precision h
-
-gap = n-1
-! check input
-if ( n < 2 ) return
-if ( n < 3 ) then
-  b(1) = (y(2)-y(1))/(x(2)-x(1))   ! linear interpolation
-  c(1) = 0.
-  d(1) = 0.
-  b(2) = b(1)
-  c(2) = 0.
-  d(2) = 0.
-  return
-end if
-!
-! step 1: preparation
-!
-d(1) = x(2) - x(1)
-c(2) = (y(2) - y(1))/d(1)
-do i = 2, gap
-  d(i) = x(i+1) - x(i)
-  b(i) = 2.0*(d(i-1) + d(i))
-  c(i+1) = (y(i+1) - y(i))/d(i)
-  c(i) = c(i+1) - c(i)
-end do
-!
-! step 2: end conditions 
-!
-b(1) = -d(1)
-b(n) = -d(n-1)
-c(1) = 0.0
-c(n) = 0.0
-if(n /= 3) then
-  c(1) = c(3)/(x(4)-x(2)) - c(2)/(x(3)-x(1))
-  c(n) = c(n-1)/(x(n)-x(n-2)) - c(n-2)/(x(n-1)-x(n-3))
-  c(1) = c(1)*d(1)**2/(x(4)-x(1))
-  c(n) = -c(n)*d(n-1)**2/(x(n)-x(n-3))
-end if
-!
-! step 3: forward elimination 
-!
-do i = 2, n
-  h = d(i-1)/b(i-1)
-  b(i) = b(i) - h*d(i-1)
-  c(i) = c(i) - h*c(i-1)
-end do
-!
-! step 4: back substitution
-!
-c(n) = c(n)/b(n)
-do j = 1, gap
-  i = n-j
-  c(i) = (c(i) - d(i)*c(i+1))/b(i)
-end do
-!
-! step 5: compute spline coefficients
-!
-b(n) = (y(n) - y(gap))/d(gap) + d(gap)*(c(gap) + 2.0*c(n))
-do i = 1, gap
-  b(i) = (y(i+1) - y(i))/d(i) - d(i)*(c(i+1) + 2.0*c(i))
-  d(i) = (c(i+1) - c(i))/d(i)
-  c(i) = 3.*c(i)
-end do
-c(n) = 3.0*c(n)
-d(n) = d(n-1)
-end subroutine spline
-
-  function ispline(u, x, y, b, c, d, n)
-!======================================================================
-! function ispline evaluates the cubic spline interpolation at point z
-! ispline = y(i)+b(i)*(u-x(i))+c(i)*(u-x(i))**2+d(i)*(u-x(i))**3
-! where  x(i) <= u <= x(i+1)
-!----------------------------------------------------------------------
-! input..
-! u       = the abscissa at which the spline is to be evaluated
-! x, y    = the arrays of given data points
-! b, c, d = arrays of spline coefficients computed by spline
-! n       = the number of data points
-! output:
-! ispline = interpolated value at point u
-!=======================================================================
-implicit none
-double precision ispline
-integer n
-double precision  u, x(n), y(n), b(n), c(n), d(n)
-integer i, j, k
-double precision dx
-
-! if u is ouside the x() interval take a boundary value (left or right)
-if(u <= x(1)) then
-  ispline = y(1)
-  return
-end if
-if(u >= x(n)) then
-  ispline = y(n)
-  return
-end if
-
-!*
-!  binary search for for i, such that x(i) <= u <= x(i+1)
-!*
-i = 1
-j = n+1
-do while (j > i+1)
-  k = (i+j)/2
-  if(u < x(k)) then
-    j=k
-    else
-    i=k
-   end if
-end do
-!*
-!  evaluate spline interpolation
-!*
-dx = u - x(i)
-ispline = y(i) + dx*(b(i) + dx*(c(i) + dx*d(i)))
-end function ispline
-
-
 function u(c,h)
 real(8) c,h,rent,u
     u = (c**(1d0-phi))*((h+h_constant)**phi)
@@ -480,8 +288,6 @@ real(8) c,h,rent,u
     u = u/(1-sigma)
     return 
 end
-
-
 
 
 subroutine survival_gen_initial
@@ -509,25 +315,444 @@ end
 
 subroutine survival_gen_new
 integer j
-survival(21:45) = 1d0
-survival(46:50) = 0.997d0
-survival(51:55) = 0.997d0
-survival(56:60) = 0.997d0
-survival(61:65) = 0.994d0
-survival(66:70) = 0.992d0
-survival(71:75) = 0.983d0
-survival(76:80) = 0.977d0
-survival(81:85) = 0.93d0
-survival(85:90) = 0.902d0
-survival(agemax+1)= 0d0
-death=1d0-survival
+survival_new(21:45) = 1d0
+survival_new(46:50) = 0.997d0
+survival_new(51:55) = 0.997d0
+survival_new(56:60) = 0.997d0
+survival_new(61:65) = 0.994d0
+survival_new(66:70) = 0.992d0
+survival_new(71:75) = 0.983d0
+survival_new(76:80) = 0.977d0
+survival_new(81:85) = 0.93d0
+survival_new(85:90) = 0.902d0
+survival_new(agemax+1)= 0d0
+death_new=1d0-survival_new
 
 open(1, file='death_new.xls', status='replace')  
    do j = agemin,agemax+1
-      write(1,*) death(j)
+      write(1,*) death_new(j)
     end do
 close(1)
 
+end
+
+function bq_motive(bequest)
+real(8) bq_motive, bequest
+bq_motive = (bequest + b_constant) ** ((1-sigma)*(1-alpha+alpha*phi))
+bq_motive = psi* (bq_motive-1d0 )/(1d0-sigma)
+
+end
+
+subroutine opt_after(j)
+real(8) cons,bequest
+integer ir,il,b,h,e,hp,j,ep,bp,times
+real(8) fai,lasttmp,resource,tmp2,tmp3,tmp,gridbp(nbp)
+
+!!$omp parallel do private(h,e,bpmin,hp,bpmax,tmp,tmp2,tmp3,il,ir,fai,gridbp,lasttmp,bp,ep,resource,cons)
+
+do b = 1,max_index(j)
+    do h = 1,max_index_h(j)
+    if (gridb(b)<-p*gridh(h)*lambdab_old*(1d0-delta_h)) cycle
+        do e = 1,ne       
+            ! start optimization
+            do hp=1,nh
+                lasttmp=small
+               ! times=0
+                resource=gridb(b)+trans&
+                +pe(e) * w*replace+p*gridh(h)-p*gridh(hp)*h_trend&
+                -cost(gridh(h),gridh(hp))
+                bpmax = resource*(judge(resource>0d0)*(1d0/qb)+&
+                judge(resource.le.0d0)*(1d0/qm))/(1d0+g)
+                bpmax = bpmax-1d-10
+                bpmin=-p*gridh(hp)*lambdab_old*(1d0-delta_h)
+                if (bpmin.ge.bpmax) exit
+                call grid_Cons_Grow(gridbp, bpmin, bpmax, growth)
+                do bp=1,nbp
+                    cons = resource-gridbp(bp)*(1d0+g)*(qb*judge(gridbp(bp)>0d0)&
+                    +qm*judge(gridbp(bp) .le. 0d0))
+                    bequest = gridbp(bp) + p * (1d0 -delta_h - kappa_s) * gridh(hp)
+                    call linear(gridbp(bp), gridb, il, ir, fai)
+                    tmp3 = fai*v(e,hp,il,j+1)+(1d0-fai)*v(e,hp,ir,j+1)  ! the vh is equal to vh in the latex  
+                    tmp = u(cons,gridh(h))+beta*(1d0-death(j+1))*tmp3 +&
+                     beta*death(j+1)*bq_motive(bequest)
+                    if (tmp>v(e,h,b,j)) then
+                        v(e,h,b,j)=tmp
+                        s(e,h,b,j)=gridbp(bp)
+                        pu(e,h,b,j)=hp
+                        c(e,h,b,j)=cons
+                        be(e,h,b,j) = bequest
+                    end if
+                    if (tmp<lasttmp) exit
+                    lasttmp=tmp
+                end do
+            enddo
+        enddo
+    enddo
+end do
+  ! !$omp  end  parallel do   
+end 
+
+subroutine opt_before(j)
+real(8) cons,bequest
+integer ir,il,b,h,e,hp,j,ep,bp
+real(8) fai,lasttmp,resource,tmp2,tmp3,tmp,gridbp(nbp)
+
+!$omp parallel do private(h,e,bpmin,hp,bpmax,tmp,tmp2,tmp3,il,ir,fai,gridbp,lasttmp,bp,ep,resource,cons, bequest)
+do b = 1,max_index(j)
+    do h = 1,max_index_h(j)
+        if (gridb(b)<-p*gridh(h)*lambdab*(1d0-delta_h)) cycle
+        do e = 1,ne
+             ! start optimization
+            do hp=1,nh
+                lasttmp = small
+                resource = gridb(b)+trans+labor(j,e)*(1d0-tau_ss)*w+&
+                p*gridh(h)-p*gridh(hp)*h_trend-cost(gridh(h),gridh(hp))
+                bpmax = resource*(judge(resource>0d0)*(1d0/qb)+judge(resource.le.0d0)*(1d0/qm))/(1d0+g)
+                bpmax = bpmax-1d-10
+                bpmin = -p*gridh(hp)*lambdab*(1d0-delta_h)
+                if (bpmin.ge.bpmax) exit
+                call grid_Cons_Grow(gridbp, bpmin, bpmax, growth)
+                do bp = 1,nbp
+                    cons = resource-gridbp(bp)*(1d0+g)*(qb*judge(gridbp(bp)>0d0)+qm*judge(gridbp(bp) .le. 0d0))
+                    tmp3 = 0d0
+                    call linear(gridbp(bp), gridb, il, ir, fai)
+                    do ep = 1,ne
+                        tmp2 = fai*v(ep,hp,il,j+1)+(1d0-fai)*v(ep,hp,ir,j+1)  ! the vh is equal to vh in the latex
+                        tmp3 = tmp3 + markov(e,ep) * tmp2
+                    end do
+                    bequest = gridbp(bp) + p * (1d0 -delta_h - kappa_s) * gridh(hp)
+                    tmp = u(cons,gridh(h))+beta*(1d0-death(j+1))*tmp3 + beta* death(j+1)*bq_motive(bequest)
+                    if (tmp>v(e,h,b,j)) then
+                        v(e,h,b,j) = tmp
+                        s(e,h,b,j) = gridbp(bp)
+                        pu(e,h,b,j) = hp
+                        c(e,h,b,j) = cons
+                        be(e,h,b,j) = bequest
+                    end if
+                    if (tmp<lasttmp) exit
+                    lasttmp = tmp
+                end do
+            enddo
+        end do
+    enddo
+enddo
+ !$omp  end  parallel do        
+end 
+
+
+subroutine opt_last
+real(8) cons,income,gridbp(nbp), bequest, tmp
+integer ir,il
+real(8) fai
+integer b,h,e,bp,ep,hp
+
+!$omp parallel do private(h,e,bpmax,cons,tmp,gridbp,bp,hp, resource, bequest)
+
+do b = 1,nb
+    do h=1,nh
+        if (gridb(b)<-p*gridh(h)*lambdab_old*(1d0-delta_h)) cycle
+        do e=1,ne
+          do hp = 1, nh
+          resource=gridb(b)&
+          +pe(e) * w*replace+p*gridh(h)+ trans-cost(gridh(h),gridh(hp))- p* gridh(hp)
+          bpmax = resource*(judge(resource>0d0)*(1d0/qb)+&
+          judge(resource.le.0d0)*(1d0/qm))/(1d0+g)
+          bpmax = bpmax-1d-10
+          bpmin= 0d0
+          if (bpmin.ge.bpmax) exit
+          call grid_Cons_Grow(gridbp, bpmin, bpmax, growth)
+          do bp =1, nbp
+             cons = resource-gridbp(bp)*(1d0+g)*(qb*judge(gridbp(bp)>0d0)&
+             +qm*judge(gridbp(bp) .le. 0d0))
+             bequest = gridbp(bp) + p* (1d0- delta_h - kappa_s) * gridh(hp)
+             if (cons.le.0d0) exit
+             tmp = u(cons, gridh(h)) + beta * bq_motive(bequest)
+             if (tmp > v(e,h,b,agemax)) then
+                v(e,h,b,agemax) = tmp
+                s(e,h,b,agemax) = gridbp(bp)
+                c(e,h,b,agemax) = cons
+                pu(e,h,b,agemax) = hp
+                be(e,h,b,agemax) = bequest
+             end if
+            end do
+          end do
+        enddo
+    enddo
+end do      
+   !$omp  end  parallel do   
+end
+
+
+! compute the policy function for people at retirement age, age 60
+subroutine opt_retire
+real(8) cons,bequest
+integer ir,il,b,h,e,hp,ep,bp
+real(8) fai,lasttmp,resource,tmp2,tmp3,tmp,gridbp(nbp)
+
+!$omp parallel do private(h,e,bpmin,hp,bpmax,tmp,tmp2,tmp3,il,ir,fai,gridbp,lasttmp,bp,ep,resource,cons, bequest)
+do b=1,max_index(retire)
+    do h=1,max_index_h(retire)
+        if (gridb(b)<-p*gridh(h)*lambdab*(1d0-delta_h)) cycle
+        do e=1,ne
+            do hp=1,nh
+                lasttmp = small
+                resource = gridb(b)+trans&
+                +labor(retire,e)*(1d0-tau_ss)*w+&
+                p*gridh(h)-p*gridh(hp)*h_trend-cost(gridh(h),gridh(hp))
+                
+                bpmax=resource*(judge(resource>0d0)*(1d0/qb)+judge(resource.le.0d0)*(1d0/qm))/(1d0+g)
+                bpmax=bpmax-1d-10
+                bpmin=-p*gridh(hp)*lambdab_old*(1d0-delta_h)
+                if (bpmin.ge.bpmax) exit
+                call grid_Cons_Grow(gridbp, bpmin, bpmax, growth)
+                do bp=1,nbp
+                    cons=resource-gridbp(bp)*(1d0+g)*(qb*judge(gridbp(bp)>0d0)+qm*judge(gridbp(bp) .le. 0d0))
+                    tmp3=0d0
+                    call linear(gridbp(bp), gridb, il, ir, fai)
+                    bequest = gridbp(bp) + p * (1d0 -delta_h - kappa_s) * gridh(hp)
+                    tmp3=fai*v(e,hp,il,retire+1)+(1d0-fai)*v(e,hp,ir,retire+1) ! the vh is equal to vh in the latex  
+                    tmp=u(cons,gridh(h))+beta*(1d0-death(retire+1))*tmp3 + beta*death(retire+1)* bq_motive(bequest) 
+                    if (tmp>v(e,h,b,retire)) then
+                        v(e,h,b,retire)=tmp
+                        s(e,h,b,retire)=gridbp(bp)
+                        pu(e,h,b,retire)=hp
+                        c(e,h,b,retire)=cons
+                        be(e,h,b,retire) = bequest
+                    end if
+                    if (tmp<lasttmp) exit
+                    lasttmp=tmp
+                end do
+            enddo
+        enddo
+    enddo
+enddo
+  !$omp  end  parallel do         
+end 
+
+! Housing transaction cost
+function cost(h1,h2)
+real(8) h1,h2,cost
+
+cost = p*delta_h*h1
+if ( h2 * h_trend >h1 ) then
+    cost = cost + kappa_b * (h2*h_trend - h1)*p
+else
+    cost = cost + kappa_s * (h1 - h2* h_trend)  * (p - p / p_trend)
+end if
+end 
+
+
+subroutine simulation
+integer ir,il,b,h,e,ep,j
+real(8) fai
+
+! initialize the distribution matrix and aggregate variable you want to calculate 
+m=0d0
+a_a=0d0
+bequest_a=0d0
+sell_a=0d0
+purchase_a=0d0
+hold_a=0d0
+life_purchase=0d0
+life_sell=0d0
+house_trans_revenue =0d0
+
+! pre allocate the matrixs before you use this subroutine!
+m(1,1,zeropoint,agemin) = 0.22d0
+m(2,1,zeropoint,agemin) = 0.22d0
+m(3,1,zeropoint,agemin) = 0.14d0
+m(4,1,zeropoint,agemin) = 0.17d0
+m(5,1,zeropoint,agemin) = 0.25d0
+
+do j=agemin,agemax
+   do b=1,nb
+      do h=1,nh
+        if (gridb(b)<-lambdab*p*gridh(h)*(1d0-delta_h)) cycle
+         do e=1,ne
+           if (m(e,h,b,j)==0d0) cycle
+           if (pu(e,h,b,j)<0) cycle
+          
+           ! the calculation of sell_a is confusing.
+           ! may be better to use house demand to plot house life cycle?
+           !sell_a=sell_a+m(e,h,b,j)*gridh(h)+m(e,h,b,j)*gridh(pu(e,h,b,j))*death(j+1)/(1d0+popgrowth)
+           ! at the beginning of the next period, all the existing people becomes samller due to popgrowth. therefore, the aggregate variable for these people declines too.
+           hold_a=hold_a+m(e,h,b,j)*gridh(h)/(1d0-death(j))
+           if (j==agemax) hold_a = hold_a + m(e,h,b,j)*gridh(pu(e,h,b,j)) !? This is correct?
+           purchase_a=purchase_a+m(e,h,b,j)*gridh(pu(e,h,b,j))
+           house_trans_revenue = house_trans_revenue+ &
+           m(e,h,b,j)* (cost (gridh(h), gridh(pu(e,h,b,j)))- gridh(h)*p*delta_h )&
+           +m(e,h,b,j)*death(j+1) * ( cost (gridh(pu(e,h,b,j)),0d0) - delta_h * p * gridh(pu(e,h,b,j)) )/(1d0+popgrowth)
+           a_a=a_a+m(e,h,b,j)*(s(e,h,b,j)* (qb*judge(s(e,h,b,j)>0d0)+qm*judge(s(e,h,b,j)<=0d0)) )/(1d0+popgrowth)
+           bequest_a=bequest_a+death(j+1)*m(e,h,b,j)* be(e,h,b,j)/(1d0+popgrowth)
+           life_purchase(j)=life_purchase(j)+m(e,h,b,j)*gridh(pu(e,h,b,j))
+           if (j<agemax)life_sell(j+1)=life_sell(j+1)+m(e,h,b,j)*gridh(pu(e,h,b,j))*(1d0-delta_h)/(1d0+popgrowth)
+           if (j<agemax) then
+             ! housetax=housetax+p*m(e,h,b,j)*abs(gridh(h)-gridh(pu(e,h,b,j)))*(tax*judge(h>pu(e,h,b,j))+kf*judge(h<pu(e,h,b,j)) )
+              call linear(s(e,h,b,j),gridb,il,ir,fai)
+              if (fai>1d0) fai=1d0
+              if (fai<0d0) fai=0d0  ! be careful
+              if (j<retire) then
+                  do ep=1,ne
+                     m(ep,pu(e,h,b,j),il,j+1) =m(ep,pu(e,h,b,j),il,j+1)+m(e,h,b,j)*fai*markov(e,ep)
+                     m(ep,pu(e,h,b,j),ir,j+1)=m(ep,pu(e,h,b,j),ir,j+1)+m(e,h,b,j)*(1d0-fai)*markov(e,ep)
+                  end do
+               else 
+                  
+                  m(e,pu(e,h,b,j),il,j+1) = m(e,pu(e,h,b,j),il,j+1)+m(e,h,b,j)*fai
+                  m(e,pu(e,h,b,j),ir,j+1) = m(e,pu(e,h,b,j),ir,j+1)+m(e,h,b,j)*(1d0-fai)
+               end if
+           
+           end if
+          
+            end do
+            end do
+            
+            end do
+           if(j<agemax)  then
+           m(:,:,:,j+1)=m(:,:,:,j+1)*(1d0-death(j+1))/(1d0+popgrowth)
+           
+           end if
+          ! print*, sum(m(:,:,:,j))
+            end do
+!!$omp end parallel do
+! now we finished the distribution. each cohort there are population of measure 1.
+! we want the aggregate house.
+bequestpositive=bequestpositive/sum(m_y(agemax,:))
+ownership=ownership/totalmeasure
+saver=1d0-ownership 
+!unconstrained=1d0-saver-constrained
+bequest_a=bequest_a/totalmeasure
+
+end 
+
+! Backward Induction
+subroutine policy_function
+integer j
+v=small
+c=small
+s=small
+pu=small_int
+
+call opt_last
+
+do j=agemax-1,agemin,(-1)
+!print*,'age', j
+
+ 
+if (j>retire) then
+call opt_after(j)
+
+elseif (j==retire) then
+call opt_retire
+
+else
+call opt_before(j)
+
+end if
+
+
+end do
+
+end
+
+subroutine maxsaving_gen
+integer j,k,il,ir
+real(8) temp,fai
+maxsaving(agemin) = 0d0
+max_index(agemin) = zeropoint
+do j = agemin+1,retire
+    temp = (maxsaving(j-1)+labor(j-1,5)*(1d0-tau_ss)*w + trans)*(1d0+r)/(1d0+g)
+    call linear(temp,gridb,il,ir,fai)
+    maxsaving(j) = gridb(ir)
+    max_index(j) = ir
+end do
+
+do j=retire+1,agemax
+   temp=(maxsaving(j-1)+pe(5)*replace*w +trans)*(1d0+r)/(1d0+g)
+   call linear(temp,gridb,il,ir,fai)
+   maxsaving(j)=gridb(ir)
+   max_index(j)=ir
+end do
+end
+
+
+subroutine maxhousing_gen
+integer j,k
+maxhousing(agemin)=0d0
+max_index_h(agemin)=1
+do j = agemin+1,retire
+    maxhousing(j)=(maxsaving(j-1)+labor(j-1,5)*(1d0-tau_ss)*w + trans)/p
+    if (maxhousing(j)<gridh(max_index_h(j-1))) then
+        max_index_h(j)=max_index_h(j-1)
+    else
+        max_index_h(j)=nh ! initialization
+        do k=max_index_h(j-1),nh
+            if (gridh(k)>maxhousing(j) )  then
+                max_index_h(j)=k
+                exit
+            end if
+        end do
+   end if
+  
+end do
+
+do j=retire+1,agemax
+   maxhousing(j)=(maxsaving(j-1)+pe(5)*w*replace + trans)/p
+   if (maxhousing(j)<gridh(max_index_h(j-1))) then
+      max_index_h(j)=max_index_h(j-1)
+   else
+      max_index_h(j)=nh ! initialization
+      do k=max_index_h(j-1),nh
+         if (gridh(k)>maxhousing(j) )  then
+             max_index_h(j)=k
+             exit
+         end if
+      end do
+   end if
+end do
+end
+
+subroutine labor_gen
+! get the base for pension and the base for tax revenue. 
+integer j,e,ep
+real(8) pe_vct(ne)
+m_y=0d0
+m_y(agemin,1) = 0.22d0
+m_y(agemin,2) = 0.22d0
+m_y(agemin,3) = 0.14d0
+m_y(agemin,4) = 0.17d0
+m_y(agemin,5) = 0.25d0  ! this is from chips data.
+!total_pension = 0d0
+base=0d0
+do j = agemin,agemax-1
+    if (j<retire) then
+      labor(j,:) = exp(gride)*exp(period(j))
+      m_y(j+1,:) = matmul(m_y(j,:), markov)
+    elseif (j==retire) then
+      labor(j,:) = exp(gride)*exp(period(j))
+      m_y(j+1,:) = m_y(j,:)
+    else
+      m_y(j+1,:) = m_y(j,:)
+      !base = base+m_y(j,e)*exp(period(retire)+gride(e)) 
+    end if
+    m_y(j+1,:) = m_y(j+1,:)*(1d0-death(j+1))/(1d0+popgrowth)  
+end do
+totalmeasure = sum(m_y) 
+totallabor = sum (m_y(agemin:retire, :)* labor(agemin:retire, :) )
+pop_pre_retire = sum( m_y(agemin: retire, :))
+pop_after_retire = totalmeasure - pop_pre_retire 
+do e = 1, ne
+    pe_vct(e) = pe(e)
+end do
+base = sum (matmul (m_y(retire+1: agemax, :),pe_vct))
+end
+
+! The function for computing individual pension benefit.
+function pe(e)
+real(8) pe
+integer e
+pe = (omega * totallabor/pop_pre_retire + &
+(1d0- omega) *  labor(retire,e))
 end
 
 end module

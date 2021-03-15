@@ -4,76 +4,101 @@ library(ggplot2)
 library(ggpubr)
 library(tidytable)
 library(scales)
+library(rlang)
 theme_set(theme_classic(base_size=11, base_family =''))
 
-#---------------------part 1 
+#---------------------part 1 -----------
 # first, plot the aggregate the variable under different equilibria.
-eqm_list = c('init','base',
-           'base_mortality','base_popgrowth',
-           'replace','tau','gama')
+scenario_name = c('mortality_only', 'popgrowth_only','mortality_popgrowth')
+policy_name = c('adjust_replacement', 'adjust_tax','pension_reform')
 
-var_list = c('p','r','wage','ownership','what','price-income ratio')
-get_a = function (eqm_name){
-  filename = paste ('aggregate', eqm_name, sep = '_')%>%
-    paste (., 'xlsx', sep = '.')
-    data = read_excel(filename, col_names = var_list)
+ eqm_list = expand.grid (scenario_name, policy_name) %>%
+   mutate(eqm_name = paste0(Var1,'_',Var2)) %>%
+   select (eqm_name) %>%unlist(.)
+
+a = get_a(eqm_list[1])
+var_list = c('Housing Price','Interest Rate','Wage',
+  'Ownership','House Stock','Construction','kl_ratio', 'Land Profit','Transfer')
+get_a = function (eqm){
+     filename = paste0('./',eqm, '_aggregate.txt')  
+     read_table(filename, col_names = var_list) %>%
+     mutate(eqm = eqm)
 }
 # the following code seems interesting.
 data_aggregate = map (eqm_list, ~get_a(.))%>%
   reduce(rbind)%>%
-  cbind(eqm_list)%>%rename(eqm = eqm_list)
-
+  rbind( get_a('initial')) %>%
+  mutate (across(where(is.numeric),   ~(.-nth(.,n()))/nth(.,n())  ) )%>%
+  slice(1:n()-1)
+  # This is very usefully. standardize each row by the value in the first row
+  
 # now start to plot the geom
 get_plot_aggregate = function (var_name){
-y.var <- rlang::sym(var_name)
+
 plot = data_aggregate %>%
-   ggplot (mapping = aes (x = reorder(eqm, !! y.var) ,
-                          y =!! y.var, fill = eqm))+
-   labs(y = var_name,x='Eqm', 
-        title = paste (var_name, 'plot',sep = ' '))+
+   ggplot (mapping = aes (x = reorder(eqm, !! sym(var_name)) ,
+                          y =!! sym(var_name), fill = eqm))+
+   labs(y =str_c('Percent Change in ', var_name))+
    geom_col()+coord_flip()+
-   theme(plot.title = element_text(hjust = 0.5))
+  theme(legend.position = "none")+
+  theme(axis.title.y=element_blank())
   filename = paste(var_name, 'png',sep ='.')
   ggsave (file = filename, plot = plot,
          dpi = 'retina', width = 6.4, height = 4.8)
   return (plot) }
 
+get_plot_aggregate('Housing Price')
 
-plot_list = map (var_list, ~get_plot_aggregate(.) )
-
+plot_aggregate = ggarrange (plotlist = map (var_list ,
+                            ~get_plot_aggregate(.) ) , ncol = 3, nrow = 3)
+ggsave (file = 'aggregate.png', plot = plot_aggregate,
+        dpi = 'retina', width = 10.0, height = 6.0)
 
 #---------------part 2: the life cycle 
 # plot the average lice cycle profile for different equilibrium. 
-get_life = function (eqm_name){
-  filename = paste ('life_cycle',eqm_name,sep = '_')%>%
-    paste (., 'xlsx',sep = '.')%>%
-    toString(.)
-  data = read_excel(filename, col_names = 
-               c ('cons', 'asset','house','income','ownership')) %>%
-  mutate (eqm = eqm_name)%>%
-  mutate (age = 20+ (row_number()-1)*5)
-  return (data)
+
+a = get_life(eqm_list[1])
+
+get_life = function (eqm){
+
+  age = map(seq(21, 90, by = 5), ~rep(.,5))%>%unlist(.)
+  
+  paste0 ('./',eqm,sep = '_life.txt')%>%
+  read_table(., col_names = 
+               c ('Cons', 'Asset','House','Ownership')) %>%
+  mutate (eqm = eqm)%>%
+  cbind ( age) %>%
+  group_by (age)%>%
+  summarize (across(-eqm, ~mean(.))) 
+  
 }
 
-plot_average = function (eqm_input, var_name){
-y.var <- rlang::sym(var_name)
-plot = map (eqm_input, ~get_life(.))%>%
+plot_average = function (eqm_list, var_name){
+
+plot = map (eqm_list, ~get_life(.))%>%
   reduce(rbind)%>%
   ggplot(mapping = aes(x= age,
-         y = !! y.var, color = eqm)) + 
+         y = !!sym(var_name), color = eqm)) + 
   geom_line(size = 1)+
-  labs(y = var_name,x='Age', title = paste ('life_cycle',var_name,sep = ' '))+
-  theme(plot.title = element_text(hjust = 0.5))
-  filename = str_c (var_name,reduce(eqm_input, function(a,b) paste(a,b, sep = '&')))%>%
-    str_c(., '.png')
+  labs(y = var_name,x='Age')+
+  theme(legend.position = 'bottom')
+  filename = paste0(var_name,
+                    reduce(eqm_list, function(a,b) paste(a,b, sep = '&')),
+                    '.png')
+  
         ggsave (file = filename, plot = plot,
-                dpi = 'retina', width = 8.0, height = 4.8)
+                dpi = 'retina', width = 6.4, height = 4.8)
         return (plot)
 }
 
-plot_average (c('init', 'base','base_mortality'), 'house')
-plot_average (c('init', 'base','base_popgrowth'), 'house')
-plot_average (c('init', 'base','replace'), 'house')
+
+plot_life_house = ggarrange(plotlist = map (setdiff(eqm_list, c('initial')),~plot_average(
+  c('initial',.), 'Income'
+) ), ncol = 2, nrow =3)
+
+ggsave (file = 'life_Income.png', plot = plot_life_house,
+        dpi = 'retina', width = 8.0, height = 6.0)
+
 
 # ----------part 3---------
 # plot the change of housing wealth for each age and each producitivty level. 
@@ -125,4 +150,5 @@ return (plot)
 }
 
 plot_list_3 = map (eqm_list, ~plot_h_change(.))
+
 

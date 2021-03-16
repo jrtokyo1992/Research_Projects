@@ -67,25 +67,26 @@ plot_var_other = var_list[var_list %in%
 # plot the average lice cycle profile for different equilibrium. 
 
 # prepare for the life cycle data
-get_life = function (eqm, var_name){
+get_life = function (eqm){
 
   age = map(seq(21, 90, by = 5), ~rep(.,5))%>%unlist(.)
   
   paste0 ('./',eqm,sep = '_life.txt')%>%
   read_table(., col_names = 
-               c ('Cons', 'Non-House','House','Ownership')) %>%
-  select (!!sym(var_name)) %>%
+               c ('Cons', 'Non-House','House','Ownership','Income')) %>%
   cbind ( age) %>%
   group_by (age)%>%
-  summarize (across(!!sym(var_name), ~mean(.))) %>%
+  summarize (across(everything(), ~mean(.))) %>%
   mutate (eqm = eqm)
 }
 
+data_life = map(eqm_list, ~get_life(.)) %>%
+  reduce(rbind) %>%
+  rbind (get_life('initial'))
 
-plot_average = function (eqm_list, var_name){
+plot_life_var = function (eqm_list, var_name){
 
-  map (eqm_list, ~get_life(., var_name))%>%
-    reduce(rbind)%>%
+ data_life%>%filter(eqm %in% eqm_list) %>%
     ggplot(mapping = aes(x= age,y = !!sym(var_name), color = eqm)) + 
     geom_line(size = 1)+
     labs(y = var_name,x='Age')+
@@ -93,21 +94,16 @@ plot_average = function (eqm_list, var_name){
     
 }
 
+plot_life = function (var_name){
+  life_plot = map (eqm_list,~plot_average( c('initial',.), var_name) )#%>%
+  filename = paste0('life_', var_name, '.png')
+  ggarrange(plotlist = life_plot , ncol = 2, nrow =3) %>%
+    ggsave (file = filename, plot = .,
+            dpi = 'retina', width = 8.0, height = 8.0)
+}
+
 # now plot.
-life_house_plot = map (eqm_list,~plot_average( c('initial',.), 'House') )#%>%
-  ggarrange(plotlist = life_house_plot , ncol = 2, nrow =3) %>%
-  ggsave (file = 'life_House.png', plot = .,
-        dpi = 'retina', width = 8.0, height = 8.0)
-
-life_nonhouse_plot = map (eqm_list,~plot_average( c('initial',.), 'Non-House') )#%>%
-  ggarrange(plotlist = life_nonhouse_plot , ncol = 2, nrow =3) %>%
-  ggsave (file = 'life_Non-House.png', plot = .,
-          dpi = 'retina', width = 8.0, height = 8.0)
-
-life_cons_plot = map (eqm_list,~plot_average( c('initial',.), 'Cons') )#%>%
-  ggarrange(plotlist = life_cons_plot, ncol = 2, nrow =3) %>%
-  ggsave (file = 'life_Cons.png', plot = .,
-          dpi = 'retina', width = 8.0, height = 8.0)
+map(c ('Cons', 'Non-House','House','Ownership','Income'), ~plot_life(.))
 
 
 # ----------part 3---------

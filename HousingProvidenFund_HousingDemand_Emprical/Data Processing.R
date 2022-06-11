@@ -266,6 +266,7 @@ df_ind_2019 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2019/chfs2
                                                                                                  ifelse(job_sector == 7777 , 'others',
                                                                                                         'others')))  )))) )
 # combine all the waves ind info and filter some unnecessary rows
+# It not not be a good idea excluding 
 df_ind = bind_rows (df_ind_2011, df_ind_2013) %>%
   bind_rows(.,df_ind_2015) %>%  bind_rows(.,df_ind_2017) %>% bind_rows(.,df_ind_2019) %>%
   arrange(hhid, pline, year) %>%
@@ -276,29 +277,40 @@ df_ind = bind_rows (df_ind_2011, df_ind_2013) %>%
           age = year - birthyear) %>% mutate (hhead = as.character(hhead)) %>%
   select (-new_hh_gender, -new_ind_gender, -new_hh_birthyear, -new_ind_birthyear) %>%
   filter (hhead == 1) %>%  # only want hhead
-  mutate (hpf = ifelse(is.na(hpf) | hpf == 2,0, hpf)) %>% # turn na hpf to 2
-  filter (age<=65) %>%
-  filter (have_job ==1 ) %>%
-  filter(!(job_sector %in% c('others','ind')) & !is.na(job_income)) %>%
+  mutate (hpf = ifelse(is.na(hpf) | hpf == 2,0, hpf)) %>% # turn na hpf to 0
+ # filter (age<=65) %>% # Exclude old people
+ # filter (have_job ==1 ) %>%
+ # filter(!(job_sector %in% c('others','ind')) & !is.na(job_income)) %>% # these sectors almost have no hpf participation
   mutate (hpf = as.factor(hpf), year = as.factor(year)) %>%
  # mutate (hsng_prchs_prpsty = ifelse(hsng_prchs_prpsty ==4, 0, 1)) %>%
   mutate (hpf_time = ifelse(hpf == 0, 0, hpf_time)) %>%
   mutate (hpf_contribution = ifelse(hpf == 0, 0, hpf_contribution)) 
 
+b = df_ind  %>% group_by(hhid) %>% mutate (hhead_change = length(unique(pline))) %>%
+  ungroup(.) %>% filter (hhead_change >1) %>% arrange(hhid, year) %>% select (hhid, year, pline, birthyear, age)
 
 ################################################################################
 
-## We want to see whether a panel approach is realistic (not necessarily DID???)
+
 ## find those household who had not purchased a house when they entered the interview
-df_house_history_new_buyer = df_house_history %>%
+## also, we want to correct the incorrect purchasing recordd.
+df_house_history_refined = df_house_history %>%
+  group_by(hhid, area) %>% 
+  mutate (min_yr_same_area = min (yr)) %>%
+  ungroup(.) %>%  
+  filter (yr != min_yr_same_area) %>%
+  select (- min_yr_same_area) %>%
+  ## in the data, house purchase records have the same area but different pruchase year. 
+  ## regard the ones with larger years as incorrect records. 
+  mutate (area = ifelse (src %in% c('legacy','torndown'),0, area)) %>% # if the house is obtained by torndown or legacy, then set area = 0
   mutate (join_survey_yr = substr(hhid, 1,4)) %>%  ## get survey joining yr for each household
   group_by(hhid) %>%
   mutate (record_num = n(), house_purchase_times = sum(yr != 'NA'), min_yr = min(yr)) %>%
-  ungroup(.) %>%
-  filter (min_yr>=join_survey_yr)  # select out those household whose first house purchasing happens later than the survey joining year
+  ungroup(.) #%>%
+ # filter (min_yr>join_survey_yr)  # select out those household whose first house purchasing happens later than the survey joining year
 
 ## the size of such household?
-length(unique(df_house_history_new_buyer$hhid)) ## 27278, seems large
+length(unique(df_house_history_new_refined$hhid)) ## 27278, seems large
 
 
 
@@ -319,3 +331,9 @@ df_ind %>%
    group_by(hpf) %>% summarize (num = n())
 
 ## next is to create a panel, by joining df_house_history_new_buyer with df_ind
+## This panel have year 2011, 2013, 2015, 2017, 2019
+
+
+
+
+

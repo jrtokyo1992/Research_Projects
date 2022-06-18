@@ -147,10 +147,11 @@ df_ind_2011 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2011/chfs2
   mutate (new_ind_gender = NA, new_ind_birthyear = NA, pab = NA) %>%
   mutate (flg = 1*(a3000==1 & a3003!=3)) %>%
   mutate (hpf = ifelse(flg ==0 | is.na(flg), 2, f4001)) %>%
-  mutate (hpf_time = f4007, hpf_contribution = f4005, aorb = NA) %>%
+  mutate (hpf_time = f4007, hpf_contribution = f4005, aorb = NA,
+         hukou = ifelse(a2022 == 1, 'rural', 'not rural') ) %>%
   select (hhid, hhcid,  pline, hpf, hpf_time, hpf_contribution, aorb,
           a3000, a3014, a3016,a3003, a3020,
-          new_ind_gender, new_ind_birthyear, a2003, a2005, hhead) %>% # do not need aorb
+          new_ind_gender, new_ind_birthyear, a2003, a2005, hhead, hukou) %>% # do not need aorb
   rename ( new_hh_gender = a2003, new_hh_birthyear = a2005,
            have_job = a3000, job_sector = a3014, employer_type = a3016,
            # job_contract = a3132h, 
@@ -172,10 +173,11 @@ df_ind_2013 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2013/chfs2
   mutate (new_ind_gender = NA, new_ind_birthyear = NA, pab = NA) %>%
   mutate (flg = 1*(a3000==1 & a3003!=3)) %>%
   mutate (hpf = ifelse(flg ==0 | is.na(flg), 2, f4001)) %>%
-  mutate (hpf_time = f4007, hpf_contribution = f4005, aorb = NA) %>%
+  mutate (hpf_time = f4007, hpf_contribution = f4005, aorb = NA,
+          hukou = ifelse(a2022 == 1, 'rural', 'not rural')) %>%
   select (hhid, hhcid,  pline,hpf, hpf_time, hpf_contribution, aorb,
           a3000, a3014, a3003, a3020,
-          new_ind_gender, new_ind_birthyear, a2003, a2005, hhead) %>% # do not need aorb
+          new_ind_gender, new_ind_birthyear, a2003, a2005, hhead, hukou) %>% # do not need aorb
   rename ( new_hh_gender = a2003, new_hh_birthyear = a2005,
            have_job = a3000, job_sector = a3014, 
            # job_contract = a3132h, 
@@ -195,10 +197,11 @@ df_ind_2015 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2015/Data/
   inner_join (df_master_2015, by = 'hhid') %>% 
   mutate (flg = ifelse(a3000 ==1 & a3003b !=3,1,0)) %>% 
   mutate (hpf = ifelse(flg ==0 | is.na(flg), 2, f4001)) %>%
-  mutate (hpf_time = f4007, hpf_contribution = f4005) %>%
+  mutate (hpf_time = f4007, hpf_contribution = f4005,
+          hukou = ifelse(a2022 == 1, 'rural', 'not rural')) %>%
   select (hhid, hhcid, pline, hpf, hpf_time, hpf_contribution, aorb,
           a3000, a3014a, a3003b, a3020, #a3020it,
-          a1113, a1114,a2003, a2005, hhead) %>%
+          a1113, a1114,a2003, a2005, hhead, hukou) %>%
   rename (
     new_ind_gender = a1113, ## new ind in existing hh
     new_ind_birthyear = a1114,
@@ -221,11 +224,12 @@ df_ind_2017 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2017/chfs2
   inner_join (df_master_2017, by = c('hhid','pline')) %>%
   mutate (flg = 1*(a3107==1|a3132a %in% c(1,2)|a3140 %in% c(1,2,3,4,5,6,7,7777)) ) %>%
   mutate (hpf = ifelse(flg == 0 | is.na(flg), 2, f4001)) %>%
-  mutate  (hpf_time = f4007, hpf_contribution = f4005 ) %>%
+  mutate  (hpf_time = f4007, hpf_contribution = f4005,
+           hukou = ifelse(a2022 == 1, 'rural', 'not rural')) %>%
   select (hhid, hhcid,pline, hpf, hpf_time, hpf_contribution,  pab,
           a3100, a3106, a3107, ##a3108, 
           a3136,#a3136it,
-          a1113, a1114, a2003, a2005, hhead) %>%
+          a1113, a1114, a2003, a2005, hhead, hukou) %>%
   rename ( aorb = pab,new_ind_gender = a1113, new_ind_birthyear = a1114,
            new_hh_gender =  a2003, new_hh_birthyear = a2005,
            have_job = a3100, job_sector = a3106, #job_contract = a3108, 
@@ -244,12 +248,13 @@ df_ind_2019 = read.dta13('C:/Users/shufe/Dropbox/Doctoral Thesis/CHFS/2019/chfs2
   inner_join (df_master_2019, by = c('hhid','pline')) %>%
   mutate (flg = 1*(a3132d %in% c(1,2,3,4,5,6)|f1001a==2|f2001a==1 )) %>%
   mutate (hpf = ifelse ( flg == 0 | is.na(flg), 2, f4001)) %>%
-  mutate (hpf_time = f4007, hpf_contribution = f4005) %>%
+  mutate (hpf_time = f4007, hpf_contribution = f4005,
+          hukou = ifelse(a2022 == 1, 'rural', 'not rural')) %>%
   select (hhid,hhcid,pline,hpf, hpf_time, hpf_contribution
           ,  pab,
           a3132b, a3132d, a3132c,##a3132h,
           a3136, #a3136it,
-          a1113, a1114, a2003, a2005,hhead,
+          a1113, a1114, a2003, a2005,hhead, hukou
           #f1001a
           ) %>%
   rename (aorb = pab, new_ind_gender = a1113, new_ind_birthyear = a1114,

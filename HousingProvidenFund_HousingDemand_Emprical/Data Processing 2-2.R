@@ -1,4 +1,8 @@
-
+library(dplyr)
+library(readstata13)
+library(ggplot2)
+library(tidyverse)
+library(stringr)
 # Data Processing 2 - 2
 # consider the changing of household head.
 
@@ -63,36 +67,70 @@ df_final_panel_headchng = bind_rows(df_final_2011_panel_headchng, df_final_2013_
                       #  hhead_change == 1 # only include those who did not experience hhead change
   ) #%>% # this excluded those people who are very old
 
+
+a = df_final_panel_headchng %>% group_by(hhid_new) %>%
+  mutate (na_hpf_time_num = sum(is.na(hpf_time))) %>% ungroup(.) %>% 
+  filter (na_hpf_time_num >0) %>% arrange (hhid_new, year)
+
 ## here we need some investigation on the hhead_change == 1 filtering. 
+df_final_panel_headchng %>% group_by(hhid_new) %>% summarize (num = n()) %>% ungroup(.) %>%
+  group_by(num) %>% summarize (num_num = n())
 
 ## check the ownership rate 
 df_final_panel_headchng %>% group_by(hhid_new) %>% summarize(max_house = max(area)) %>% ungroup(.) %>%
   summarize (ownership = sum(max_house>0)/n())
 
-## check the change of hh head 
+## HPF status change during. Consider it as an predicted???? endogeneous.......
+df_final_panel_headchng %>%
+  group_by (hhid_new) %>% summarize (hpf_end = hpf[year == max(year)],
+                                     hpf_initial = hpf[year == min(year)]) %>%
+  ungroup(.) %>% mutate (hpf_change = as.numeric(hpf_end) - as.numeric(hpf_initial) )%>%
+  group_by (hpf_change) %>% summarize (num = n())
 
-### hpf_time
-
-df_final_panel %>%
-  filter (!is.na(hpf_time)) %>% ggplot(aes(x = hpf_time)) + geom_density()
-
-df_final_panel %>% 
-  filter (!is.na(hpf_time)) %>% summarize (max = max(hpf_time), min = min(hpf_time))
-
-a = df_final_panel %>% filter (hpf_time == 9999)
-df_final_panel %>% filter (hhid == '2013024290')
 
 # from the df_final_panel  table, create a cross-section data 
 
-df_final_cs_headchng = df_final_panel_headchng %>% group_by (hhid_new, job_sector) %>%
-  mutate (job_sector_freq = n() ) %>% ungroup (.) %>% 
-  group_by (hhid_new, job_emply) %>%
-  mutate (job_emply_freq = n() ) %>% ungroup (.) %>% 
+df_final_cs_headchng = df_final_panel_headchng %>% 
+  ##group_by (hhid_new, job_sector) %>%
+  ##mutate (job_sector_freq = n() ) %>% ungroup (.) %>% 
+  ##group_by (hhid_new, job_emply) %>%
+  ##mutate (job_emply_freq = n() ) %>% ungroup (.) %>% 
   group_by(hhid_new) %>%
-  summarize (hpf_time = hpf_time[year == min(year)], 
+  summarize (initial_hpf_time = hpf_time[year == min(year)], 
              house= max(area), 
+             age = age[year == min(year)],
+             initial_sector = job_sector[year == min(year)],
+             initial_hukou = hukou[year == min(year)],
+             enter_year = min(year),
+             initial_hpf = hpf[year == min(year)],
+             initial_income = job_income[year == min(year)],
+             hpf_change = as.numeric (hpf[year == max(year)]) - as.numeric(hpf[year == min(year)])
             # job_sector = job_sector[job_sector_freq == max(job_sector_freq)],
        #      job_emply = job_emply[job_emply_freq == max(job_emply_freq)]
-  )
+  ) %>%
+  mutate (initial_hpf_time = ifelse(initial_hpf_time> 300, 300, initial_hpf_time)) %>%
+  filter( initial_hukou != 'rural') # get rid of unrealistic hpf_time 
+  ## also get rid of the rural resident. 
+   
 
-df_final_panel %>% filter (hhid == '201100018')
+
+df_final_cs_headchng %>% group_by(initial_hpf) %>% summarize (avg_house = mean(house))
+
+################################################################Some EDA: 
+
+# home ownership (ratio of people who purchased a house later.)
+df_final_cs_headchng %>% summarize (sum(house>0)/n())
+
+# The distribution of hpf and house by age.
+b = df_final_cs_headchng %>% group_by(age) %>% summarize (
+  num = n(),
+  ratio_hpf = sum(initial_hpf ==1)/n(),
+  avg_house = mean(house)) %>%
+  ungroup(.) %>% arrange(age)
+
+## Check the correlation between hpf_time and age?
+df_final_cs_headchng %>% 
+  filter (!is.na(hpf_time) & !is.na(age) ) %>%
+  summarize (cor_hpftime_age = cor(hpf_time, age))
+
+
